@@ -1,0 +1,293 @@
+
+celsius = 6
+
+
+//////////////////// VARIABLES /////////////////////
+
+
+
+tstop = 400
+nb = 2
+nc = 4
+
+
+FREQ = 25		 	// Stimulation frequency in Hz
+NPULSES = 6			// Number of pulses for stimulation
+
+NAV = 0.014 			// Na channel density
+KV = 0.004			// K channel density
+
+
+
+PUMP = 1
+PUMPDENSITY = .001
+
+/////////////////   MORPHOLOGY ///////////////////////
+
+
+create a, b[nb], c[nc]
+
+a {nseg=100 L=10000 diam = 20}      // peripherial axon
+
+for i=0, nb-1 b[i]{
+
+  nseg = 100
+  L = 12000
+  diam = 10
+  connect b[i](0), a(1)
+
+}
+for j=0, nc-1 c[j]{
+  
+  nseg = 100
+  L = 2000
+  diam = 5
+  if (j <2){
+
+    connect c[j](0), b[0](1)
+  }
+  if(j>=2){
+
+    connect c[j](0), b[1](1)
+  }
+}
+
+
+
+objref DRG   					// create new object called DRG
+DRG = new SectionList()				// Define DRG as a list of sections
+
+a DRG.append()				// DRG sections: tjunction, stem, and soma   
+for i=0,1 b[i]{
+  
+  DRG.append() 
+}
+for i=0,3 c[i]{
+  
+  DRG.append()  
+} 
+
+/////////////////// INITIALIZATION /////////////////
+
+
+///// GENERAL INITIALIZATION /////////
+
+
+
+proc init(){				// INITIALIZATION FUNCTION
+
+
+
+  forall {
+
+       v=-60				// VREST FOR ALL COMPARTMENTS
+
+       finitialize(v)			// reset all state variables
+       fcurrent()     			// calculate all currents
+       	
+       e_pas = -65  //v + (ina + ik)/g_pas	// calculate leak equilibrium potential
+  }
+
+
+}			/// end of initialization
+
+
+
+wopen("Fig5coutput2.dat")		    // Open file to write results
+
+
+///////////////////////// STIMULATE PERIPHERAL AXON /////////////////////
+
+access a	  	    // Work with main axon
+objectvar stim			    // create object called stim
+stim = new IClamp(0.1)		    // Define stim as a current clamp (IClamp) at position 0.2
+stim.del = 5			    // Stimulus delay
+stim.dur = tstop		    // Duration of the stimulus
+stim.amp = 0          // Amplitude of the stimulus starts as zero.
+
+for i=0,10{
+
+  new_diam = 5+i*1.5
+
+  print "diameter ",new_diam
+  for j=0,1 b[j]{diam = new_diam}
+
+
+  for T=1,10{
+
+    celsius=T*4
+
+    print "T ", celsius
+
+
+    forall {        // for all compartments
+
+      insert nahh
+      gnabar_nahh = NAV
+      q10_g_nahh =1.5
+      //mshift_nahh = -6   // NaV1.7/1.8 channelshift
+      //hshift_nahh = 6    // NaV1.7/1.8 channelshift
+
+      insert borgkdr      // insert delayed rectifier K channels
+      gkdrbar_borgkdr = KV    // density of K channels
+      q10_g_borgkdr = 1.5
+      insert ka
+      gkabar_ka=0.008
+      q10_g_ka =1.5
+
+      ek = -70        // K equilibrium potential
+
+      insert pas      // insert leak channels 
+      g_pas = 0.000125    // set Rm = 10000 ohms-cm2
+      v = -60       // set Vrest
+
+      Ra = 100      // intracellular resistance
+    }
+
+    forsec DRG{
+
+
+      if (PUMP == 1) {
+
+      insert nadifl
+
+      insert pump
+      pumpbar_pump = PUMPDENSITY
+      q10_pump = 1.5
+
+      }
+    }
+
+    result = 3
+    
+    for con_factor = 1,10{
+
+      if(result==3){
+
+        init()            // initialize
+
+        forsec DRG {
+
+        if (PUMP == 1){
+
+          ko = 3.72
+          ki = 110
+          nao = 340
+
+          nai = 50 + 15 * con_factor
+          nai_nadifl = nai
+
+
+          fcurrent()
+          e_pas = v + (ina+ik)/g_pas   // remember to add ica if needed
+
+          }
+        }
+
+        PERIOD_B = 1000/0.7/(2.32^((celsius-6)/10))      // Define period between stimuli
+        PERIOD = PERIOD_B*0.2/5 
+        countdown = 0         // Spike interval variable
+        pulsecount = NPULSES        // Spike number variable
+
+
+        t=0               // Set time variable (t) to zero
+        dt = 0.025          // Time step in msec
+        tstop = 100+ PERIOD_B
+        stim.dur = tstop  
+
+        spike_a=0
+        spike_b=0
+        spike_c=0
+        no_spike_a = 0
+        no_spike_a = 0
+        no_spike_a = 0
+
+        num_pulse=0
+        num_spike_a=0
+        num_spike_b=0
+        num_spike_c=0
+
+        while (t<tstop){                   // Simulation Loop starts here
+
+
+          stim.amp = 0           // Stimulation amplitude is set to zero
+
+          if ((t>=100) && (pulsecount > 0) &&(t<4500)){      // After 50 msec, start stimulating
+
+            if ((countdown <= 0) && (countdown > -1)) stim.amp = 65     // Stimulate 1 ms pulse
+
+            if (countdown <= -1){   // done with this pulse             // End of 1 ms pulse
+              countdown = PERIOD                     // Reset interval variable
+              pulsecount -= 1            // Decrement count of pulses
+              num_pulse +=1
+              if(pulsecount==0){
+                countdown=PERIOD_B*0.8
+                pulsecount=NPULSES
+              }
+
+            }
+          }
+
+          if ((t>=100)) countdown -= dt    // Decrement interval variable
+
+          if(t>50){
+              if(a.v(0.9)>-10){
+                if(no_spike_a == 1){
+                  num_spike_a += 1
+                  no_spike_a = 0                 
+                }
+              }else{
+                  no_spike_a = 1
+              }
+              if(b[1].v(0.9)>-10){
+                if(no_spike_b == 1){
+                  num_spike_b += 1
+                  no_spike_b = 0
+                }
+              }else{
+                no_spike_b = 1
+              }
+              if(c[3].v(0.9)>-10){
+                if(no_spike_c == 1){
+                  num_spike_c += 1
+                  no_spike_c = 0
+                }
+              }else{
+                no_spike_c = 1
+              }
+         }
+
+         fadvance()           // Advance simulation one time step     
+
+        }
+
+        print "num_pulse",num_pulse, "spike_a ",num_spike_a,"spike_b ",num_spike_b,"spike_c ",num_spike_c
+        if(num_spike_a >= num_pulse){
+
+          if(num_spike_b >= num_pulse){
+
+            if(num_spike_c >= num_pulse){
+
+              result = 3
+            }else{
+
+              result = 2
+            }
+          }else{
+
+              result =1
+          }
+        }else{
+            result = 0
+        }
+
+        if(result<3 || con_factor==10){
+          fprint("%g %g ",result,50 + 15 * con_factor)
+          }
+      }
+    }
+  } 
+  fprint("\n")
+}
+
+
