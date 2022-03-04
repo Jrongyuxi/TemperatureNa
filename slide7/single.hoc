@@ -27,13 +27,13 @@ PUMPDENSITY = 0.0006
 
 create a, b[nb], c[nc]
 
-a {nseg=100 L=10000 diam = 4}      // peripherial axon
+a {nseg=100 L=10000 diam = 20}      // peripherial axon
 
 for i=0, nb-1 b[i]{
 
   nseg = 100
   L = 12000
-  diam = 2
+  diam = 10
   connect b[i](0), a(1)
 
 }
@@ -41,7 +41,7 @@ for j=0, nc-1 c[j]{
   
   nseg = 100
   L = 5000
-  diam = 1
+  diam = 5
   if (j <2){
 
     connect c[j](0), b[0](1)
@@ -151,7 +151,7 @@ if (PUMP == 1){
   ki = 110
   nao = 340
 
-  nai = 90
+  nai = 65
   nai_nadifl = nai
 
 
@@ -173,9 +173,6 @@ dt = 0.025          // Time step in msec
 
 
 while (t<tstop){                   // Simulation Loop starts here
-
-  a{nai = 90}
-  for i=0,1 b[i]{nai = 90}
 
   stim.amp = 0           // Stimulation amplitude is set to zero
 
